@@ -33,6 +33,8 @@ public class CameraActivity extends AppCompatActivity implements OnFrameAvailabl
         catCamera2();
         mRawCamera.open(this, "0", this);
         mRawCamera.open(this, "1", this);
+        mRawCamera.open(this, "2", this);
+        mRawCamera.open(this, "3", this);
     }
 
     private void catCamera2() {
@@ -71,6 +73,10 @@ public class CameraActivity extends AppCompatActivity implements OnFrameAvailabl
             mCameraView1.setImageBitmap(bmp);
         } else if ("1".equals(cameraId)) {
             mCameraView2.setImageBitmap(bmp);
+        } else if ("2".equals(cameraId)) {
+            mCameraView3.setImageBitmap(bmp);
+        } else if ("3".equals(cameraId)) {
+            mCameraView4.setImageBitmap(bmp);
         }
     }
 }
