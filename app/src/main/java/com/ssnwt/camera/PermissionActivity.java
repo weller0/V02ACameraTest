@@ -78,7 +78,7 @@ public class PermissionActivity extends Activity {
     }
 
     private void startApp() {
-        Intent intent = new Intent(getApplicationContext(), CameraActivity.class);
+        Intent intent = new Intent(getApplicationContext(), NDKCameraActivity.class);
         startActivity(intent);
         finish();
     }
