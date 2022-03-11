@@ -104,7 +104,7 @@ int NdkCamera::open(const char *cameraId, OnImageAvailable cb) {
     prepareCamera(state);
 
     const char *const *physicalCameraIds;
-    size_t physicalCameraIdCnt;
+    size_t physicalCameraIdCnt = 0;
     status = enumeratePhysicalCamera(state, &physicalCameraIds, &physicalCameraIdCnt);
     if (status != AMEDIA_OK) {
         LOGW("[NdkCamera]enumeratePhysicalCamera failed : %d", status);
