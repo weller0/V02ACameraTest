@@ -17,6 +17,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
 import java.util.Arrays;
 
 public class NDKCameraActivity extends AppCompatActivity {
@@ -62,7 +63,7 @@ public class NDKCameraActivity extends AppCompatActivity {
     }
 
     // Called by jni
-    ByteBuffer buffer = null;
+    IntBuffer buffer = null;
 
     private void onImageAvailable(String cameraId, byte[] data, int size,
         int w, int h, int format, long timestamp) {
@@ -73,13 +74,15 @@ public class NDKCameraActivity extends AppCompatActivity {
             + "), format:" + format
             + ", timestamp:" + timestamp
             + ", delta:" + (SystemClock.elapsedRealtimeNanos() - timestamp));
-        if (buffer == null) buffer = ByteBuffer.allocate(w * h);
+        if (buffer == null) buffer = IntBuffer.allocate(w * h);
+        buffer.clear();
+        for (int i = 0; i < w * h; i++) {
+            buffer.put(0xff000000 | data[i] << 16 | data[i] << 8 | data[i]);
+        }
+        buffer.rewind();
+        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        bmp.copyPixelsFromBuffer(buffer);
         runOnUiThread(() -> {
-            buffer.clear();
-            buffer.put(data);
-            buffer.position(0);
-            Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ALPHA_8);
-            bmp.copyPixelsFromBuffer(buffer);
             if ("0".equals(cameraId)) {
                 mCameraView1.setImageBitmap(bmp);
             } else if ("1".equals(cameraId)) {
