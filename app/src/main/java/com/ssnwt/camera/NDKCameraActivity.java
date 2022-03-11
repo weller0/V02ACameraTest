@@ -7,9 +7,13 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.os.SystemClock;
 import android.util.Log;
 import android.widget.ImageView;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import java.nio.ByteBuffer;
@@ -27,12 +31,14 @@ public class NDKCameraActivity extends AppCompatActivity {
         mCameraView2 = findViewById(R.id.camera_view_2);
         mCameraView3 = findViewById(R.id.camera_view_3);
         mCameraView4 = findViewById(R.id.camera_view_4);
-        openCamera("0");
+        openCamera("6");
+
+        main.sendEmptyMessage(0);
     }
 
     @Override protected void onDestroy() {
         super.onDestroy();
-        closeCamera("0");
+        closeCamera("6");
     }
 
     private void catCamera2() {
@@ -82,11 +88,22 @@ public class NDKCameraActivity extends AppCompatActivity {
                 mCameraView3.setImageBitmap(bmp);
             } else if ("3".equals(cameraId)) {
                 mCameraView4.setImageBitmap(bmp);
+            } else if ("6".equals(cameraId)) {
+                mCameraView1.setImageBitmap(bmp);
             }
         });
     }
 
+    private Handler main = new Handler(Looper.getMainLooper()) {
+        @Override public void handleMessage(@NonNull Message msg) {
+            readCameraData();
+            sendEmptyMessageDelayed(0, 33);
+        }
+    };
+
     private native void openCamera(String id);
+
+    private native void readCameraData();
 
     private native void closeCamera(String id);
 

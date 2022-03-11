@@ -6,11 +6,12 @@
 #define CAMERA_NDKCAMERA_H
 
 #include <jni.h>
-#include <queue>
+#include <set>
 #include <camera/NdkCameraManager.h>
 #include <camera/NdkCameraError.h>
 #include <camera/NdkCameraDevice.h>
 #include <camera/NdkCameraMetadataTags.h>
+#include <camera/NdkCameraMetadata.h>
 #include <media/NdkImage.h>
 #include <media/NdkImageReader.h>
 #include "native_debug.h"
@@ -22,9 +23,29 @@ typedef void (*OnImageAvailable)(const char *id, uint8_t *data, int size,
 
 typedef struct _CameraState {
     char *cameraId;
+    char *physicalCameraId;
     ACameraDevice *device;
+    bool isLogicalMultiCamera;
     AImageReader *imageReader;
     OnImageAvailable callback;
+    ACaptureRequest *captureRequest;
+    ACaptureSessionOutputContainer *outputContainer;
+    ACameraCaptureSession *captureSession;
+    // logical camera
+    ACaptureSessionOutput *sessionOutput;
+    ACameraOutputTarget *outputTarget;
+
+    _CameraState *copy(_CameraState *oldState) {
+        _CameraState *newState = new _CameraState();
+        newState->cameraId = oldState->cameraId;
+        newState->device = oldState->device;
+        newState->isLogicalMultiCamera = oldState->isLogicalMultiCamera;
+        newState->callback = oldState->callback;
+        newState->captureRequest = oldState->captureRequest;
+        newState->outputContainer = oldState->outputContainer;
+        //newState->imageReader = oldState->imageReader;
+        return newState;
+    }
 } CameraState;
 
 class NdkCamera {
@@ -35,12 +56,23 @@ public:
 
     int open(const char *cameraId, OnImageAvailable cb);
 
-    int close(const char *cameraId);
+    int close();
+
+    int read();
 
 private:
+    int read(CameraState *state);
+
     int createImageReader(CameraState *state);
 
+    int prepareCamera(CameraState *state);
+
+    int addCamera(CameraState *state);
+
     int startPreview(CameraState *state);
+
+    int enumeratePhysicalCamera(CameraState *state, const char *const **physicalCameraIds,
+                                size_t *physicalCameraIdCnt);
 
     ACameraDevice_StateCallbacks *getDeviceListener(CameraState *state);
 
@@ -49,7 +81,7 @@ private:
     AImageReader_ImageListener *getImageListener(CameraState *state);
 
     ACameraManager *pCameraManager;
-    queue<CameraState *> cameraStates;
+    set<CameraState *> cameraStates;
 };
 
 #endif //CAMERA_NDKCAMERA_H

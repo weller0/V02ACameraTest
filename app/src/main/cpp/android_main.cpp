@@ -47,8 +47,14 @@ Java_com_ssnwt_camera_NDKCameraActivity_openCamera(JNIEnv *env, jobject thiz, js
 }
 
 JNIEXPORT void JNICALL
+Java_com_ssnwt_camera_NDKCameraActivity_readCameraData(JNIEnv *env, jobject thiz) {
+    // TODO: implement readCameraData()
+    pCamera->read();
+}
+
+JNIEXPORT void JNICALL
 Java_com_ssnwt_camera_NDKCameraActivity_closeCamera(JNIEnv *env, jobject thiz, jstring id) {
     // TODO: implement closeCamera()
-    pCamera->close((char *) env->GetStringChars(id, JNI_FALSE));
+    pCamera->close();
 }
 }
