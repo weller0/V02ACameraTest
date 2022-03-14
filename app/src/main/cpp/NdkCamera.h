@@ -26,6 +26,7 @@ typedef struct _CameraState {
     char *physicalCameraId;
     ACameraDevice *device;
     bool isLogicalMultiCamera;
+    int64_t lastFrameTime;
     AImageReader *imageReader;
     OnImageAvailable callback;
     ACaptureRequest *captureRequest;
@@ -60,8 +61,11 @@ public:
 
     int read();
 
-private:
     int read(CameraState *state);
+
+    CameraState *findCameraState(AImageReader *reader);
+
+private:
 
     int createImageReader(CameraState *state);
 
@@ -74,11 +78,11 @@ private:
     int enumeratePhysicalCamera(CameraState *state, const char *const **physicalCameraIds,
                                 size_t *physicalCameraIdCnt);
 
-    ACameraDevice_StateCallbacks *getDeviceListener(CameraState *state);
+    ACameraDevice_StateCallbacks *getDeviceListener(NdkCamera *camera);
 
-    ACameraCaptureSession_stateCallbacks *getSessionListener(CameraState *state);
+    ACameraCaptureSession_stateCallbacks *getSessionListener(NdkCamera *camera);
 
-    AImageReader_ImageListener *getImageListener(CameraState *state);
+    AImageReader_ImageListener *getImageListener(NdkCamera *camera);
 
     ACameraManager *pCameraManager;
     set<CameraState *> cameraStates;

@@ -10,30 +10,8 @@ void onCameraErrorState(void *ctx, ACameraDevice *device, int error) {
 }
 
 void onImageAvailable(void *ctx, AImageReader *reader) {
-    auto *state = static_cast<CameraState *>(ctx);
-    AImage *image;
-    int status = AImageReader_acquireLatestImage(reader, &image);
-    if (status != AMEDIA_OK) {
-        return;
-    }
-    int32_t planeNum = 0;
-    status = AImage_getNumberOfPlanes(image, &planeNum);
-    if (status != AMEDIA_OK || planeNum <= 0) {
-        return;
-    }
-    if (buffer == nullptr) {
-        buffer = (uint8_t *) malloc(PREVIEW_WIDTH * PREVIEW_HEIGHT);
-    }
-    int32_t format = 0, size = 0;
-    int64_t timestamp = 0;
-    AImage_getFormat(image, &format);
-    AImage_getTimestamp(image, &timestamp);
-    AImage_getPlaneData(image, 0, &buffer, &size);
-    if (state != nullptr) {
-        state->callback(state->physicalCameraId ? state->physicalCameraId : state->cameraId,
-                        buffer, size, PREVIEW_WIDTH, PREVIEW_HEIGHT, format, timestamp);
-    }
-    AImage_delete(image);
+    auto *camera = static_cast<NdkCamera *>(ctx);
+    camera->read(camera->findCameraState(reader));
 }
 
 void onSessionClosed(void *ctx, ACameraCaptureSession *session) {
@@ -49,6 +27,14 @@ void onSessionActive(void *ctx, ACameraCaptureSession *session) {
     LOGD("onSessionActive");
 }
 
+uint64_t elapsedRealtimeNanos() {
+    struct timespec ts{};
+    if (clock_gettime(CLOCK_BOOTTIME, &ts) != 0) {
+        return 0;
+    }
+    return ts.tv_sec * 1000000000 + ts.tv_nsec;
+}
+
 NdkCamera::NdkCamera() {
     LOGD("[NdkCamera]+");
     pCameraManager = ACameraManager_create();
@@ -59,26 +45,26 @@ NdkCamera::~NdkCamera() {
     close();
 }
 
-ACameraDevice_StateCallbacks *NdkCamera::getDeviceListener(CameraState *state) {
+ACameraDevice_StateCallbacks *NdkCamera::getDeviceListener(NdkCamera *camera) {
     static ACameraDevice_StateCallbacks cameraDeviceListener = {
-            .context = state,
+            .context = camera,
             .onDisconnected = nullptr,
             .onError = ::onCameraErrorState,
     };
     return &cameraDeviceListener;
 }
 
-AImageReader_ImageListener *NdkCamera::getImageListener(CameraState *state) {
+AImageReader_ImageListener *NdkCamera::getImageListener(NdkCamera *camera) {
     static AImageReader_ImageListener imageListener = {
-            .context = state,
+            .context = camera,
             .onImageAvailable = ::onImageAvailable,
     };
     return &imageListener;
 }
 
-ACameraCaptureSession_stateCallbacks *NdkCamera::getSessionListener(CameraState *state) {
+ACameraCaptureSession_stateCallbacks *NdkCamera::getSessionListener(NdkCamera *camera) {
     static ACameraCaptureSession_stateCallbacks stateCallbacks = {
-            .context = state,
+            .context = camera,
             .onClosed = ::onSessionClosed,
             .onReady = ::onSessionReady,
             .onActive = ::onSessionActive,
@@ -93,7 +79,7 @@ int NdkCamera::open(const char *cameraId, OnImageAvailable cb) {
     state->callback = cb;
     state->cameraId = strdup(cameraId);
     state->physicalCameraId = nullptr;
-    status = ACameraManager_openCamera(pCameraManager, cameraId, getDeviceListener(state),
+    status = ACameraManager_openCamera(pCameraManager, cameraId, getDeviceListener(this),
                                        &state->device);
     if (status != ACAMERA_OK || state->device == nullptr) {
         LOGW("[NdkCamera]ACameraManager_openCamera failed : %d", status);
@@ -250,13 +236,48 @@ int NdkCamera::startPreview(CameraState *state) {
     LOGD("[NdkCamera]>>>>>>>>>> startPreview <<<<<<<<<<");
     int status = ACameraDevice_createCaptureSession(state->device,
                                                     state->outputContainer,
-                                                    getSessionListener(state),
+                                                    getSessionListener(this),
                                                     &state->captureSession);
     if (status != ACAMERA_OK) {
         LOGW("[NdkCamera]ACameraDevice_createCaptureSession failed : %d", status);
         return status;
     }
     LOGD("[NdkCamera]captureSession=%p", state->captureSession);
+    // config
+    const int32_t range[] = {60, 60};
+    ACaptureRequest_setEntry_i32(
+            state->captureRequest,
+            ACAMERA_CONTROL_AE_TARGET_FPS_RANGE,
+            2,
+            range);
+
+    const int64_t frame_duration[] = {16000000};
+    ACaptureRequest_setEntry_i64(
+            state->captureRequest,
+            ACAMERA_SENSOR_FRAME_DURATION,
+            1,
+            frame_duration);
+
+    /*const uint8_t ae_mode[] = {0};
+    ACaptureRequest_setEntry_u8(
+            state->captureRequest,
+            ACAMERA_CONTROL_AE_MODE,
+            1,
+            ae_mode);
+
+    const int64_t exposure[] = {2000000};
+    ACaptureRequest_setEntry_i64(
+            state->captureRequest,
+            ACAMERA_SENSOR_EXPOSURE_TIME,
+            1,
+            exposure);
+
+    const int32_t sensitivity[] = {1000};
+    ACaptureRequest_setEntry_i32(
+            state->captureRequest,
+            ACAMERA_SENSOR_SENSITIVITY,
+            1,
+            sensitivity);*/
     int seqId;
     // 不能使用ACameraCaptureSession_logicalCamera_setRepeatingRequest
     status = ACameraCaptureSession_setRepeatingRequest(state->captureSession, nullptr, 1,
@@ -282,6 +303,7 @@ int NdkCamera::read(CameraState *state) {
         AImage *image;
         int status = AImageReader_acquireNextImage(state->imageReader, &image);
         if (status != AMEDIA_OK) {
+            LOGW("read fail [%s, %s]", state->cameraId, state->physicalCameraId);
             return AMEDIA_ERROR_UNKNOWN;
         }
         int32_t planeNum = 0;
@@ -298,13 +320,27 @@ int NdkCamera::read(CameraState *state) {
         AImage_getTimestamp(image, &timestamp);
         AImage_getPlaneData(image, 0, &buffer, &size);
 
-        //LOGD("read timestamp:%ld, [%s, %s]", timestamp, state->cameraId, state->physicalCameraId);
+        LOGD("read frame -> %s timestamp:%ld, frame interval:%ld ms, curr time diff:%ld ms",
+             state->physicalCameraId ? state->physicalCameraId : state->cameraId,
+             timestamp,
+             (timestamp - state->lastFrameTime) / 1000000,
+             (elapsedRealtimeNanos() - timestamp) / 1000000);
+        state->lastFrameTime = timestamp;
 
         state->callback(state->physicalCameraId ? state->physicalCameraId : state->cameraId,
                         buffer, size, PREVIEW_WIDTH, PREVIEW_HEIGHT, format, timestamp);
         AImage_delete(image);
     }
     return AMEDIA_OK;
+}
+
+CameraState *NdkCamera::findCameraState(AImageReader *reader) {
+    if (!cameraStates.empty()) {
+        for (auto cameraState : cameraStates) {
+            if (cameraState->imageReader == reader) return cameraState;
+        }
+    }
+    return nullptr;
 }
 
 int NdkCamera::close() {
@@ -328,10 +364,10 @@ int NdkCamera::createImageReader(CameraState *state) {
         LOGW("[NdkCamera]AImageReader_new failed : %d", status);
         return status;
     }
-//    status = AImageReader_setImageListener(state->imageReader, getImageListener(state));
-//    if (status != AMEDIA_OK) {
-//        LOGW("[NdkCamera]AImageReader_setImageListener failed : %d", status);
-//        return status;
-//    }
+    status = AImageReader_setImageListener(state->imageReader, getImageListener(this));
+    if (status != AMEDIA_OK) {
+        LOGW("[NdkCamera]AImageReader_setImageListener failed : %d", status);
+        return status;
+    }
     return AMEDIA_OK;
 }

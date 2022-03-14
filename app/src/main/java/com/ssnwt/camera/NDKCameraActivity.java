@@ -10,13 +10,11 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
-import android.os.SystemClock;
 import android.util.Log;
 import android.widget.ImageView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.util.Arrays;
 
@@ -34,7 +32,7 @@ public class NDKCameraActivity extends AppCompatActivity {
         mCameraView4 = findViewById(R.id.camera_view_4);
         openCamera("6");
 
-        main.sendEmptyMessage(0);
+        //main.sendEmptyMessage(0);
     }
 
     @Override protected void onDestroy() {
@@ -68,21 +66,15 @@ public class NDKCameraActivity extends AppCompatActivity {
     private void onImageAvailable(String cameraId, byte[] data, int size,
         int w, int h, int format, long timestamp) {
         if (data == null) return;
-        Log.d(TAG, "[" + cameraId
-            + "] size:" + size
-            + " (" + w + ", " + h
-            + "), format:" + format
-            + ", timestamp:" + timestamp
-            + ", delta:" + (SystemClock.elapsedRealtimeNanos() - timestamp));
-        if (buffer == null) buffer = IntBuffer.allocate(w * h);
-        buffer.clear();
-        for (int i = 0; i < w * h; i++) {
-            buffer.put(0xff000000 | data[i] << 16 | data[i] << 8 | data[i]);
-        }
-        buffer.rewind();
-        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-        bmp.copyPixelsFromBuffer(buffer);
         runOnUiThread(() -> {
+            if (buffer == null) buffer = IntBuffer.allocate(w * h);
+            buffer.clear();
+            for (int i = 0; i < w * h; i++) {
+                buffer.put(0xff000000 | data[i] << 16 | data[i] << 8 | data[i]);
+            }
+            buffer.rewind();
+            Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            bmp.copyPixelsFromBuffer(buffer);
             if ("0".equals(cameraId)) {
                 mCameraView1.setImageBitmap(bmp);
             } else if ("1".equals(cameraId)) {
@@ -100,7 +92,7 @@ public class NDKCameraActivity extends AppCompatActivity {
     private Handler main = new Handler(Looper.getMainLooper()) {
         @Override public void handleMessage(@NonNull Message msg) {
             readCameraData();
-            sendEmptyMessageDelayed(0, 33);
+            sendEmptyMessageDelayed(0, 16);
         }
     };
 
